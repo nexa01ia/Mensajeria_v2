@@ -1,0 +1,8 @@
+node_modules/
+.cache/
+dist/
+build/
+.DS_Store
+*.log
+.firebase/
+.gh-pages/
