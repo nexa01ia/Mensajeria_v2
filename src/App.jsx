@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, LogOut, Download, Trash2, Users, Package, CheckCircle, Save, UserPlus, Edit2, X, Key, Shield, Lock, Calendar } from 'lucide-react';
+import { Truck, LogOut, Download, Trash2, Users, Package, CheckCircle, Save, UserPlus, Edit2, X, Key, Shield, Lock, Calendar, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const MensajeriaHSSystem = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -7,6 +7,10 @@ const MensajeriaHSSystem = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  
+  // Estados para mostrar/ocultar contraseñas
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   
   const [salida, setSalida] = useState('');
   const [efectivas, setEfectivas] = useState('');
@@ -24,6 +28,20 @@ const MensajeriaHSSystem = () => {
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('mensajero');
   const [activeTab, setActiveTab] = useState('registro');
+  
+  // Estado para validación de contraseña
+  const [passwordStrength, setPasswordStrength] = useState({
+    score: 0,
+    message: '',
+    color: '',
+    requirements: {
+      length: false,
+      uppercase: false,
+      lowercase: false,
+      number: false,
+      special: false
+    }
+  });
   
   // Filtros básicos
   const [filtroID, setFiltroID] = useState('');
@@ -59,6 +77,69 @@ const MensajeriaHSSystem = () => {
     const dev = parseInt(salida || 0) - parseInt(efectivas || 0);
     setDevoluciones(dev >= 0 ? dev : 0);
   }, [salida, efectivas]);
+
+  // Evaluar fortaleza de contraseña
+  useEffect(() => {
+    evaluatePasswordStrength(newPassword);
+  }, [newPassword]);
+
+  const evaluatePasswordStrength = (pwd) => {
+    const requirements = {
+      length: pwd.length >= 8,
+      uppercase: /[A-Z]/.test(pwd),
+      lowercase: /[a-z]/.test(pwd),
+      number: /[0-9]/.test(pwd),
+      special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)
+    };
+
+    const score = Object.values(requirements).filter(Boolean).length;
+    
+    let message = '';
+    let color = '';
+    
+    if (pwd.length === 0) {
+      message = '';
+      color = '';
+    } else if (score < 3) {
+      message = 'Débil';
+      color = 'text-red-600';
+    } else if (score === 3) {
+      message = 'Media';
+      color = 'text-yellow-600';
+    } else if (score === 4) {
+      message = 'Buena';
+      color = 'text-blue-600';
+    } else {
+      message = 'Excelente';
+      color = 'text-green-600';
+    }
+
+    setPasswordStrength({
+      score,
+      message,
+      color,
+      requirements
+    });
+  };
+
+  const validatePassword = (pwd) => {
+    if (pwd.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    if (!/[A-Z]/.test(pwd)) {
+      return 'La contraseña debe contener al menos una mayúscula';
+    }
+    if (!/[a-z]/.test(pwd)) {
+      return 'La contraseña debe contener al menos una minúscula';
+    }
+    if (!/[0-9]/.test(pwd)) {
+      return 'La contraseña debe contener al menos un número';
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) {
+      return 'La contraseña debe contener al menos un carácter especial';
+    }
+    return null;
+  };
 
   // Verificar si el sistema está bloqueado por intentos fallidos
   const checkLockout = () => {
@@ -180,285 +261,165 @@ const MensajeriaHSSystem = () => {
     } else {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
-      setLoginError(`Usuario o contraseña incorrectos (Intento ${newAttempts}/5)`);
       
-      // Bloquear después de 5 intentos fallidos
       if (newAttempts >= 5) {
-        const lockoutData = {
-          time: Date.now(),
-          attempts: newAttempts
-        };
-        localStorage.setItem('mensajeria_lockout', JSON.stringify(lockoutData));
+        const lockTime = Date.now();
         setIsLocked(true);
-        setLockoutTime(lockoutData.time + 15 * 60 * 1000);
+        setLockoutTime(lockTime + 15 * 60 * 1000);
+        localStorage.setItem('mensajeria_lockout', JSON.stringify({
+          time: lockTime,
+          attempts: newAttempts
+        }));
         setLoginError('Demasiados intentos fallidos. Sistema bloqueado por 15 minutos.');
+        
+        // Registrar intento de bloqueo
+        const loginLog = {
+          usuario: sanitizedUsername,
+          fecha: currentDateTime,
+          accion: 'CUENTA_BLOQUEADA'
+        };
+        const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
+        logs.push(loginLog);
+        localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
+      } else {
+        setLoginError(`Usuario o contraseña incorrectos. Intento ${newAttempts} de 5.`);
+        
+        // Registrar intento fallido
+        const loginLog = {
+          usuario: sanitizedUsername,
+          fecha: currentDateTime,
+          accion: 'LOGIN_FALLIDO'
+        };
+        const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
+        logs.push(loginLog);
+        localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
       }
     }
   };
 
   const handleLogout = () => {
-    // Registrar el cierre de sesión
-    const logoutLog = {
-      usuario: username,
-      fecha: currentDateTime,
-      accion: 'LOGOUT'
-    };
-    const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-    logs.push(logoutLog);
-    localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-
     setIsLoggedIn(false);
     setUserRole('');
     setUsername('');
     setPassword('');
-    resetForm();
     setActiveTab('registro');
   };
 
   const handleSubmit = () => {
-    // El nombre del mensajero ahora es automáticamente el usuario logueado
-    const nombreMensajero = username;
-
     if (!salida || !efectivas) {
-      alert('Por favor complete todos los campos obligatorios');
+      alert('Por favor complete todos los campos requeridos');
       return;
     }
 
-    // Validación de datos numéricos
-    const salidaNum = parseInt(salida);
-    const efectivasNum = parseInt(efectivas);
-
-    if (isNaN(salidaNum) || isNaN(efectivasNum) || salidaNum < 0 || efectivasNum < 0) {
-      alert('Por favor ingrese valores numéricos válidos');
-      return;
-    }
-
-    if (efectivasNum > salidaNum) {
-      alert('Las entregas efectivas no pueden ser mayores que la salida');
-      return;
-    }
-
-    const nuevoRegistro = {
+    const registro = {
       id: Date.now(),
-      nombreMensajero,
+      mensajero: username,
       fecha: currentDateTime,
-      salida: salidaNum,
-      efectivas: efectivasNum,
-      devoluciones,
-      creadoPor: username,
-      fechaCreacion: new Date().toISOString()
+      salida: parseInt(salida),
+      efectivas: parseInt(efectivas),
+      devoluciones: parseInt(devoluciones)
     };
 
-    const nuevosRegistros = [...registros, nuevoRegistro];
-    setRegistros(nuevosRegistros);
-    localStorage.setItem('mensajeria_registros', JSON.stringify(nuevosRegistros));
-    
-    // Registrar la acción en el log de auditoría
-    const auditLog = {
-      usuario: username,
-      fecha: currentDateTime,
-      accion: 'CREAR_REGISTRO',
-      detalles: `ID: ${nuevoRegistro.id}, Salida: ${salidaNum}, Efectivas: ${efectivasNum}`
-    };
-    const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-    logs.push(auditLog);
-    localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
+    const newRegistros = [...registros, registro];
+    setRegistros(newRegistros);
+    localStorage.setItem('mensajeria_registros', JSON.stringify(newRegistros));
 
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
-    resetForm();
-  };
-
-  const resetForm = () => {
     setSalida('');
     setEfectivas('');
     setDevoluciones(0);
+    
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const exportToExcel = async () => {
-    if (registrosFiltrados.length === 0) {
-      alert('No hay registros para exportar con los filtros aplicados');
-      return;
-    }
-
-    // Crear HTML para Excel sin imágenes
-    let htmlContent = `
-      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid black; padding: 8px; text-align: left; }
-            th { background-color: #1e3a8a; color: white; font-weight: bold; }
-            .header { background-color: #f97316; color: white; padding: 20px; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>MENSAJERÍA HS - Reporte de Entregas</h1>
-            <p>Generado el: ${new Date().toLocaleString('es-CO')}</p>
-            <p>Exportado por: ${username}</p>
-            ${fechaDesde || fechaHasta ? `<p>Período: ${fechaDesde || 'Inicio'} hasta ${fechaHasta || 'Fin'}</p>` : ''}
-          </div>
-          <br>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Nombre Mensajero</th>
-                <th>Fecha</th>
-                <th>Salida</th>
-                <th>Efectivas</th>
-                <th>Devoluciones</th>
-              </tr>
-            </thead>
-            <tbody>
-    `;
-
-    registrosFiltrados.forEach(reg => {
-      htmlContent += `
-        <tr>
-          <td>${reg.id}</td>
-          <td>${reg.nombreMensajero}</td>
-          <td>${reg.fecha}</td>
-          <td>${reg.salida}</td>
-          <td>${reg.efectivas}</td>
-          <td>${reg.devoluciones}</td>
-        </tr>
-      `;
-    });
-
-    htmlContent += `
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `MensajeriaHS_${new Date().toISOString().split('T')[0]}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    // Registrar la exportación
-    const auditLog = {
-      usuario: username,
-      fecha: currentDateTime,
-      accion: 'EXPORTAR_DATOS',
-      detalles: `${registrosFiltrados.length} registros exportados`
-    };
-    const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-    logs.push(auditLog);
-    localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-  };
-
-  const handleDeleteAll = () => {
-    // Solo admin y soporte pueden eliminar todos los registros
-    if (userRole !== 'admin' && userRole !== 'soporte') {
-      alert('No tiene permisos para esta acción');
-      return;
-    }
-
-    if (window.confirm('¿Está COMPLETAMENTE seguro de eliminar TODOS los registros? Esta acción NO se puede deshacer.')) {
-      if (window.confirm('ÚLTIMA ADVERTENCIA: ¿Confirma la eliminación de TODOS los registros?')) {
-        const auditLog = {
-          usuario: username,
-          fecha: currentDateTime,
-          accion: 'ELIMINAR_TODOS_REGISTROS',
-          detalles: `${registros.length} registros eliminados`
-        };
-        const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-        logs.push(auditLog);
-        localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-
-        setRegistros([]);
-        localStorage.setItem('mensajeria_registros', JSON.stringify([]));
-        alert('Todos los registros han sido eliminados');
-      }
+  const handleDeleteRegistro = (id) => {
+    if (window.confirm('¿Está seguro de eliminar este registro?')) {
+      const newRegistros = registros.filter(r => r.id !== id);
+      setRegistros(newRegistros);
+      localStorage.setItem('mensajeria_registros', JSON.stringify(newRegistros));
     }
   };
 
-  const openUserModal = (user = null) => {
-    // Solo admin y soporte pueden gestionar usuarios
-    if (userRole !== 'admin' && userRole !== 'soporte') {
-      alert('No tiene permisos para gestionar usuarios');
-      return;
-    }
+  const handleExport = () => {
+    const registrosFiltrados = getFilteredRegistros();
+    
+    const headers = ['ID', 'Mensajero', 'Fecha', 'Salida', 'Efectivas', 'Devoluciones'];
+    const csvContent = [
+      headers.join(','),
+      ...registrosFiltrados.map(r => 
+        `${r.id},${r.mensajero},${r.fecha},${r.salida},${r.efectivas},${r.devoluciones}`
+      )
+    ].join('\n');
 
-    if (user) {
-      setEditingUser(user);
-      setNewUsername(user);
-      // No mostrar la contraseña de soporte
-      if (user === 'soporte') {
-        setNewPassword('');
-      } else {
-        setNewPassword(usuarios[user].password);
-      }
-      setNewRole(usuarios[user].role);
-    } else {
-      setEditingUser(null);
-      setNewUsername('');
-      setNewPassword('');
-      setNewRole('mensajero');
-    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `registros_mensajeria_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const togglePermiso = (user) => {
+    const newPermisos = { ...permisos };
+    newPermisos[user] = !newPermisos[user];
+    savePermisos(newPermisos);
+  };
+
+  const handleAddUser = () => {
+    setEditingUser(null);
+    setNewUsername('');
+    setNewPassword('');
+    setNewRole('mensajero');
+    setShowUserModal(true);
+  };
+
+  const handleEditUser = (user) => {
+    setEditingUser(user);
+    setNewUsername(user);
+    setNewPassword(usuarios[user].password);
+    setNewRole(usuarios[user].role);
     setShowUserModal(true);
   };
 
   const handleSaveUser = () => {
-    if (!newUsername.trim() || !newPassword.trim()) {
-      alert('Por favor complete todos los campos');
+    // Validaciones
+    if (!newUsername.trim()) {
+      alert('El nombre de usuario es requerido');
       return;
     }
 
-    // Validar contraseña segura
-    if (newPassword.length < 8) {
-      alert('La contraseña debe tener al menos 8 caracteres');
+    if (!newPassword.trim()) {
+      alert('La contraseña es requerida');
       return;
     }
 
-    const sanitizedUsername = newUsername.trim().toLowerCase();
-
-    // Prevenir modificación de usuarios protegidos
-    if ((editingUser === 'admin' || editingUser === 'soporte') && sanitizedUsername !== editingUser) {
-      alert('No se puede cambiar el nombre de los usuarios protegidos (admin/soporte)');
-      return;
+    // Validar fortaleza de contraseña solo para usuarios nuevos o cambios de contraseña
+    if (!editingUser || newPassword !== usuarios[editingUser]?.password) {
+      const validationError = validatePassword(newPassword);
+      if (validationError) {
+        alert(validationError);
+        return;
+      }
     }
 
-    // Prevenir que usuarios que no son soporte modifiquen la contraseña de soporte
-    if (editingUser === 'soporte' && userRole !== 'soporte') {
-      alert('Solo el usuario soporte puede modificar su propia contraseña');
-      return;
+    const updatedUsers = { ...usuarios };
+    const finalUsername = newUsername.trim().toLowerCase();
+
+    // Si estamos editando y el nombre cambió, eliminar el antiguo
+    if (editingUser && editingUser !== finalUsername) {
+      // No permitir cambiar nombres de usuarios protegidos
+      if (editingUser === 'admin' || editingUser === 'soporte') {
+        alert('No se puede cambiar el nombre de usuarios protegidos');
+        return;
+      }
+      delete updatedUsers[editingUser];
     }
 
-    const newUsers = { ...usuarios };
-
-    if (editingUser && editingUser !== sanitizedUsername) {
-      delete newUsers[editingUser];
-    }
-
-    newUsers[sanitizedUsername] = {
+    updatedUsers[finalUsername] = {
       password: newPassword.trim(),
       role: newRole
     };
 
-    saveUsuarios(newUsers);
-
-    // Registrar la acción
-    const auditLog = {
-      usuario: username,
-      fecha: currentDateTime,
-      accion: editingUser ? 'EDITAR_USUARIO' : 'CREAR_USUARIO',
-      detalles: `Usuario: ${sanitizedUsername}, Rol: ${newRole}`
-    };
-    const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-    logs.push(auditLog);
-    localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-
+    saveUsuarios(updatedUsers);
     setShowUserModal(false);
     setEditingUser(null);
     setNewUsername('');
@@ -467,117 +428,67 @@ const MensajeriaHSSystem = () => {
   };
 
   const handleDeleteUser = (user) => {
-    // Solo admin y soporte pueden eliminar usuarios
-    if (userRole !== 'admin' && userRole !== 'soporte') {
-      alert('No tiene permisos para eliminar usuarios');
-      return;
-    }
-
     // Proteger usuarios críticos
     if (user === 'admin' || user === 'soporte') {
-      alert('No se puede eliminar el usuario ' + user + ' (usuario protegido)');
+      alert('No se puede eliminar este usuario protegido');
       return;
     }
 
     if (window.confirm(`¿Está seguro de eliminar el usuario "${user}"?`)) {
-      const newUsers = { ...usuarios };
-      delete newUsers[user];
+      const updatedUsers = { ...usuarios };
+      delete updatedUsers[user];
+      saveUsuarios(updatedUsers);
       
-      // También eliminar permisos del usuario
+      // También eliminar sus permisos
       const newPermisos = { ...permisos };
       delete newPermisos[user];
       savePermisos(newPermisos);
+    }
+  };
+
+  const getFilteredRegistros = () => {
+    return registros.filter(registro => {
+      // Filtro por ID (parcial)
+      if (filtroID && !registro.id.toString().includes(filtroID)) return false;
       
-      saveUsuarios(newUsers);
+      // Filtro por mensajero (parcial, case insensitive)
+      if (filtroMensajero && !registro.mensajero.toLowerCase().includes(filtroMensajero.toLowerCase())) return false;
+      
+      // Filtro por fecha exacta
+      if (filtroFecha && !registro.fecha.includes(filtroFecha)) return false;
+      
+      // Filtro por salida (exacto)
+      if (filtroSalida && registro.salida.toString() !== filtroSalida) return false;
+      
+      // Filtro por efectivas (exacto)
+      if (filtroEfectivas && registro.efectivas.toString() !== filtroEfectivas) return false;
+      
+      // Filtro por devoluciones (exacto)
+      if (filtroDevoluciones && registro.devoluciones.toString() !== filtroDevoluciones) return false;
 
-      // Registrar la eliminación
-      const auditLog = {
-        usuario: username,
-        fecha: currentDateTime,
-        accion: 'ELIMINAR_USUARIO',
-        detalles: `Usuario eliminado: ${user}`
-      };
-      const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-      logs.push(auditLog);
-      localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-    }
-  };
+      // Filtro por rango de fechas
+      if (fechaDesde || fechaHasta) {
+        // Extraer solo la parte de fecha del registro (DD/MM/YYYY)
+        const fechaRegistro = registro.fecha.split(',')[0].trim();
+        const [dia, mes, anio] = fechaRegistro.split('/').map(Number);
+        const fechaRegistroDate = new Date(anio, mes - 1, dia);
 
-  const togglePermiso = (user) => {
-    if (userRole !== 'soporte') {
-      alert('Solo el usuario soporte puede gestionar permisos');
-      return;
-    }
-
-    const newPermisos = { ...permisos };
-    newPermisos[user] = !newPermisos[user];
-    savePermisos(newPermisos);
-
-    // Registrar cambio de permiso
-    const auditLog = {
-      usuario: username,
-      fecha: currentDateTime,
-      accion: 'CAMBIAR_PERMISO',
-      detalles: `Usuario: ${user}, Permiso: ${newPermisos[user] ? 'Concedido' : 'Revocado'}`
-    };
-    const logs = JSON.parse(localStorage.getItem('mensajeria_audit_log') || '[]');
-    logs.push(auditLog);
-    localStorage.setItem('mensajeria_audit_log', JSON.stringify(logs.slice(-100)));
-  };
-
-  // Verificar si un usuario tiene permiso de consulta
-  const tienePermisoConsulta = () => {
-    // Admin y soporte siempre tienen permiso
-    if (userRole === 'admin' || userRole === 'soporte') {
-      return true;
-    }
-    // Mensajeros necesitan permiso explícito de soporte
-    return permisos[username] === true;
-  };
-
-  // Convertir fecha del formato "DD/MM/YYYY, HH:MM:SS" a objeto Date
-  const parseFechaRegistro = (fechaStr) => {
-    if (!fechaStr) return null;
-    try {
-      const [fecha, hora] = fechaStr.split(', ');
-      const [dia, mes, año] = fecha.split('/');
-      return new Date(`${año}-${mes}-${dia}T${hora}`);
-    } catch (e) {
-      return null;
-    }
-  };
-
-  // Filtrado de registros con todas las opciones
-  const registrosFiltrados = registros.filter(reg => {
-    const matchID = filtroID === '' || reg.id.toString().includes(filtroID);
-    const matchMensajero = filtroMensajero === '' || reg.nombreMensajero.toLowerCase().includes(filtroMensajero.toLowerCase());
-    const matchFecha = filtroFecha === '' || reg.fecha.includes(filtroFecha);
-    const matchSalida = filtroSalida === '' || reg.salida.toString().includes(filtroSalida);
-    const matchEfectivas = filtroEfectivas === '' || reg.efectivas.toString().includes(filtroEfectivas);
-    const matchDevoluciones = filtroDevoluciones === '' || reg.devoluciones.toString().includes(filtroDevoluciones);
-    
-    // Filtro de fecha avanzado (desde/hasta)
-    let matchFechaDesde = true;
-    let matchFechaHasta = true;
-    
-    if (fechaDesde || fechaHasta) {
-      const fechaRegistro = parseFechaRegistro(reg.fecha);
-      if (fechaRegistro) {
         if (fechaDesde) {
-          const desde = new Date(fechaDesde);
-          desde.setHours(0, 0, 0, 0);
-          matchFechaDesde = fechaRegistro >= desde;
+          const [anioDesde, mesDesde, diaDesde] = fechaDesde.split('-').map(Number);
+          const fechaDesdeDate = new Date(anioDesde, mesDesde - 1, diaDesde);
+          if (fechaRegistroDate < fechaDesdeDate) return false;
         }
+
         if (fechaHasta) {
-          const hasta = new Date(fechaHasta);
-          hasta.setHours(23, 59, 59, 999);
-          matchFechaHasta = fechaRegistro <= hasta;
+          const [anioHasta, mesHasta, diaHasta] = fechaHasta.split('-').map(Number);
+          const fechaHastaDate = new Date(anioHasta, mesHasta - 1, diaHasta);
+          if (fechaRegistroDate > fechaHastaDate) return false;
         }
       }
-    }
-    
-    return matchID && matchMensajero && matchFecha && matchSalida && matchEfectivas && matchDevoluciones && matchFechaDesde && matchFechaHasta;
-  });
+
+      return true;
+    });
+  };
 
   const limpiarFiltros = () => {
     setFiltroID('');
@@ -590,32 +501,44 @@ const MensajeriaHSSystem = () => {
     setFechaHasta('');
   };
 
+  const registrosFiltrados = getFilteredRegistros();
+
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-orange-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-700 to-orange-500 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 sm:p-10 transform transition-all duration-300 hover:scale-105">
           <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="bg-gradient-to-r from-blue-900 to-orange-500 p-4 rounded-full">
-                <Truck size={48} className="text-white" />
-              </div>
+            <div className="flex justify-center mb-6">
+              <img 
+                src="/logo-mensajeria-hs.jpg" 
+                alt="Mensajería HS Logo" 
+                className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded-2xl shadow-lg"
+              />
             </div>
-            <h1 className="text-3xl font-bold text-blue-900 mb-2">MENSAJERÍA HS</h1>
-            <p className="text-gray-600 flex items-center justify-center gap-2">
-              <Shield size={16} className="text-orange-500" />
-              Sistema de Control de Entregas - Seguro
-            </p>
+            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-900 to-orange-500 bg-clip-text text-transparent mb-2">
+              Mensajería HS
+            </h1>
+            <p className="text-gray-600 text-sm sm:text-base">Sistema de Control de Entregas</p>
           </div>
 
           {isLocked && (
-            <div className="mb-4 p-4 bg-red-100 border-2 border-red-500 rounded-lg">
-              <p className="text-red-700 text-sm font-semibold text-center">
-                ⚠️ Sistema bloqueado por seguridad
-              </p>
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-start gap-3 animate-pulse">
+              <Lock className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
+              <div className="text-sm text-red-800">
+                <p className="font-semibold">Sistema bloqueado por seguridad</p>
+                <p className="mt-1">Demasiados intentos fallidos. Intente nuevamente en unos minutos.</p>
+              </div>
             </div>
           )}
 
-          <div className="space-y-4">
+          {loginError && !isLocked && (
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-start gap-3">
+              <AlertCircle className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
+              <p className="text-sm text-red-800">{loginError}</p>
+            </div>
+          )}
+
+          <div className="space-y-5">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Usuario
@@ -625,7 +548,7 @@ const MensajeriaHSSystem = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
                 placeholder="Ingrese su usuario"
                 disabled={isLocked}
               />
@@ -635,40 +558,52 @@ const MensajeriaHSSystem = () => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Contraseña
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                placeholder="Ingrese su contraseña"
-                disabled={isLocked}
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                {loginError}
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                  className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
+                  placeholder="Ingrese su contraseña"
+                  disabled={isLocked}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition"
+                  disabled={isLocked}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
-            )}
+            </div>
 
             <button
               onClick={handleLogin}
               disabled={isLocked}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition shadow-lg ${
+              className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-200 ${
                 isLocked 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-blue-900 to-orange-500 hover:shadow-xl'
+                  : 'bg-gradient-to-r from-blue-900 to-orange-500 hover:shadow-lg hover:scale-105 active:scale-95'
               }`}
             >
-              {isLocked ? '🔒 Sistema Bloqueado' : 'Iniciar Sesión'}
+              {isLocked ? 'Sistema Bloqueado' : 'Iniciar Sesión'}
             </button>
           </div>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              Sistema protegido con autenticación segura
-            </p>
+          <div className="mt-8 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Shield className="text-blue-600 mt-0.5 flex-shrink-0" size={18} />
+              <div className="text-xs text-blue-800">
+                <p className="font-semibold mb-1">Medidas de seguridad activas:</p>
+                <ul className="list-disc list-inside space-y-1 ml-1">
+                  <li>Bloqueo automático tras 5 intentos fallidos</li>
+                  <li>Contraseñas con validación de complejidad</li>
+                  <li>Registro de auditoría de accesos</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -676,466 +611,385 @@ const MensajeriaHSSystem = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="bg-gradient-to-r from-blue-900 to-orange-500 text-white p-6 shadow-lg">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Truck size={40} />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-900 to-orange-500 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logo-mensajeria-hs.jpg" 
+                alt="Mensajería HS Logo" 
+                className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-lg shadow-md"
+              />
               <div>
-                <h1 className="text-3xl font-bold">MENSAJERÍA HS</h1>
-                <p className="text-blue-100">Sistema de Control de Entregas</p>
+                <h1 className="text-2xl sm:text-3xl font-bold">Mensajería HS</h1>
+                <p className="text-sm text-blue-100">Usuario: <span className="font-semibold">{username}</span></p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm">
-                Bienvenido: <span className="font-bold">{username}</span>
-                {userRole === 'soporte' && <span className="ml-2 bg-purple-600 px-2 py-1 rounded text-xs">🛡️ SOPORTE</span>}
-                {userRole === 'admin' && <span className="ml-2 bg-yellow-600 px-2 py-1 rounded text-xs">👨‍💼 ADMIN</span>}
-              </p>
-              <p className="text-xs text-blue-100">{currentDateTime}</p>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm text-blue-100">Fecha y Hora</p>
+                <p className="text-base font-semibold">{currentDateTime}</p>
+              </div>
               <button
                 onClick={handleLogout}
-                className="mt-2 flex items-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition text-sm"
+                className="flex items-center gap-2 bg-white text-blue-900 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition duration-200 shadow-md"
               >
-                <LogOut size={16} />
-                Cerrar Sesión
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+                <span className="sm:hidden">Salir</span>
               </button>
             </div>
+          </div>
+          
+          {/* Mobile DateTime */}
+          <div className="text-center sm:hidden mt-3 pt-3 border-t border-blue-700">
+            <p className="text-xs text-blue-100">Fecha y Hora</p>
+            <p className="text-sm font-semibold">{currentDateTime}</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6">
-        {showSuccess && (
-          <div className="mb-6 bg-green-100 border-2 border-green-500 rounded-lg p-4 flex items-center gap-3 animate-pulse">
-            <CheckCircle className="text-green-600" size={24} />
-            <span className="text-green-800 font-semibold">¡Registro guardado exitosamente!</span>
-          </div>
-        )}
-
-        {/* Tabs de navegación */}
-        <div className="bg-white rounded-2xl shadow-lg mb-6">
-          <div className="flex gap-4 p-4 border-b overflow-x-auto">
+      {/* Navigation Tabs */}
+      <div className="bg-white shadow-md sticky top-0 z-10">
+        <div className="container mx-auto px-4">
+          <div className="flex overflow-x-auto">
             <button
               onClick={() => setActiveTab('registro')}
-              className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 font-semibold transition-all whitespace-nowrap ${
                 activeTab === 'registro'
-                  ? 'text-orange-500 border-b-4 border-orange-500'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-orange-600 border-b-4 border-orange-600'
+                  : 'text-gray-600 hover:text-orange-600'
               }`}
             >
-              <Package className="inline mr-2" size={20} />
-              Registro de Entregas
+              <Package size={20} />
+              <span className="text-sm sm:text-base">Registro</span>
             </button>
-            
-            {tienePermisoConsulta() && (
+
+            {(userRole === 'admin' || userRole === 'soporte' || permisos[username]) && (
               <button
                 onClick={() => setActiveTab('consultas')}
-                className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 font-semibold transition-all whitespace-nowrap ${
                   activeTab === 'consultas'
-                    ? 'text-orange-500 border-b-4 border-orange-500'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-orange-600 border-b-4 border-orange-600'
+                    : 'text-gray-600 hover:text-orange-600'
                 }`}
               >
-                📋 Consultas
-              </button>
-            )}
-            
-            {(userRole === 'admin' || userRole === 'soporte') && (
-              <button
-                onClick={() => setActiveTab('usuarios')}
-                className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
-                  activeTab === 'usuarios'
-                    ? 'text-orange-500 border-b-4 border-orange-500'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Users className="inline mr-2" size={20} />
-                Usuarios
+                <CheckCircle size={20} />
+                <span className="text-sm sm:text-base">Consultas</span>
               </button>
             )}
 
-            {userRole === 'soporte' && (
-              <button
-                onClick={() => setActiveTab('permisos')}
-                className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
-                  activeTab === 'permisos'
-                    ? 'text-orange-500 border-b-4 border-orange-500'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Lock className="inline mr-2" size={20} />
-                Permisos
-              </button>
+            {(userRole === 'admin' || userRole === 'soporte') && (
+              <>
+                <button
+                  onClick={() => setActiveTab('usuarios')}
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'usuarios'
+                      ? 'text-orange-600 border-b-4 border-orange-600'
+                      : 'text-gray-600 hover:text-orange-600'
+                  }`}
+                >
+                  <Users size={20} />
+                  <span className="text-sm sm:text-base">Usuarios</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('permisos')}
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'permisos'
+                      ? 'text-orange-600 border-b-4 border-orange-600'
+                      : 'text-gray-600 hover:text-orange-600'
+                  }`}
+                >
+                  <Shield size={20} />
+                  <span className="text-sm sm:text-base">Permisos</span>
+                </button>
+              </>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Contenido de las pestañas */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          {activeTab === 'registro' && (
-            <>
-              <h2 className="text-2xl font-bold text-blue-900 mb-6 flex items-center gap-2">
-                <Package className="text-orange-500" />
-                Registro de Entregas
+      {/* Content Area */}
+      <div className="container mx-auto px-4 py-6 sm:py-8">
+        {/* Tab: Registro */}
+        {activeTab === 'registro' && (
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-6 sm:mb-8 flex items-center gap-3">
+              <Package className="text-orange-500" />
+              Registro de Entregas
+            </h2>
+
+            {showSuccess && (
+              <div className="mb-6 p-4 bg-green-50 border-2 border-green-500 rounded-lg flex items-center gap-3 animate-bounce">
+                <CheckCircle className="text-green-600" size={24} />
+                <p className="text-green-800 font-semibold">¡Registro guardado exitosamente!</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Paquetes de Salida *
+                </label>
+                <input
+                  type="number"
+                  value={salida}
+                  onChange={(e) => setSalida(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
+                  placeholder="Cantidad"
+                  min="0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Entregas Efectivas *
+                </label>
+                <input
+                  type="number"
+                  value={efectivas}
+                  onChange={(e) => setEfectivas(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
+                  placeholder="Cantidad"
+                  min="0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Devoluciones
+                </label>
+                <input
+                  type="number"
+                  value={devoluciones}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                  disabled
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-orange-500 text-white px-8 py-3 rounded-lg font-bold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
+            >
+              <Save size={20} />
+              Guardar Registro
+            </button>
+          </div>
+        )}
+
+        {/* Tab: Consultas */}
+        {activeTab === 'consultas' && (userRole === 'admin' || userRole === 'soporte' || permisos[username]) && (
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-blue-900 flex items-center gap-3">
+                <CheckCircle className="text-orange-500" />
+                Consultar Registros
               </h2>
+              <button
+                onClick={handleExport}
+                className="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2"
+              >
+                <Download size={20} />
+                Exportar a CSV
+              </button>
+            </div>
 
-              <div className="space-y-4">
+            {/* Filtros */}
+            <div className="mb-6 p-4 sm:p-6 bg-blue-50 border-2 border-blue-200 rounded-lg">
+              <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                <Package size={20} />
+                Filtros de Búsqueda
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <input
+                  type="text"
+                  placeholder="Buscar por ID"
+                  value={filtroID}
+                  onChange={(e) => setFiltroID(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar por Mensajero"
+                  value={filtroMensajero}
+                  onChange={(e) => setFiltroMensajero(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar por Fecha"
+                  value={filtroFecha}
+                  onChange={(e) => setFiltroFecha(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Salida"
+                  value={filtroSalida}
+                  onChange={(e) => setFiltroSalida(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Efectivas"
+                  value={filtroEfectivas}
+                  onChange={(e) => setFiltroEfectivas(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Devoluciones"
+                  value={filtroDevoluciones}
+                  onChange={(e) => setFiltroDevoluciones(e.target.value)}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Nombre del Mensajero *
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Calendar size={16} />
+                    Fecha Desde
                   </label>
                   <input
-                    type="text"
-                    value={username}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                    disabled
-                    title="El nombre se asigna automáticamente según el usuario logueado"
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    ℹ️ Este campo se rellena automáticamente con tu usuario
-                  </p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Salida *
-                    </label>
-                    <input
-                      type="number"
-                      value={salida}
-                      onChange={(e) => setSalida(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Efectivas *
-                    </label>
-                    <input
-                      type="number"
-                      value={efectivas}
-                      onChange={(e) => setEfectivas(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Devoluciones
-                    </label>
-                    <input
-                      type="number"
-                      value={devoluciones}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                      disabled
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Calendar size={16} />
+                    Fecha Hasta
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  />
                 </div>
-
-                <button
-                  onClick={handleSubmit}
-                  className="w-full bg-gradient-to-r from-blue-900 to-orange-500 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
-                >
-                  <Save size={20} />
-                  Guardar Registro
-                </button>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'consultas' && tienePermisoConsulta() && (
-            <>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
-                  📋 Consultas de Registros
-                </h2>
-                {(userRole === 'admin' || userRole === 'soporte') && (
-                  <div className="flex gap-4">
-                    <button
-                      onClick={exportToExcel}
-                      className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition font-semibold"
-                    >
-                      <Download size={20} />
-                      Exportar a Excel
-                    </button>
-                    <button
-                      onClick={handleDeleteAll}
-                      className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition font-semibold"
-                    >
-                      <Trash2 size={20} />
-                      Eliminar Todo
-                    </button>
-                  </div>
-                )}
               </div>
 
-              {/* Filtros avanzados de fecha para admin y soporte */}
-              {(userRole === 'admin' || userRole === 'soporte') && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="text-blue-600" size={20} />
-                    <h3 className="font-bold text-blue-900">Filtro por Rango de Fechas</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Desde
-                      </label>
-                      <input
-                        type="date"
-                        value={fechaDesde}
-                        onChange={(e) => setFechaDesde(e.target.value)}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Hasta
-                      </label>
-                      <input
-                        type="date"
-                        value={fechaHasta}
-                        onChange={(e) => setFechaHasta(e.target.value)}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        onClick={limpiarFiltros}
-                        className="w-full bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition font-semibold"
-                      >
-                        <X className="inline mr-2" size={16} />
-                        Limpiar Filtros
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={limpiarFiltros}
+                className="w-full sm:w-auto bg-gray-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
+              >
+                Limpiar Filtros
+              </button>
+            </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-blue-900 to-orange-500 text-white">
-                      <th className="p-3 text-left">
-                        <div>ID</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroID}
-                          onChange={(e) => setFiltroID(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                      <th className="p-3 text-left">
-                        <div>Mensajero</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroMensajero}
-                          onChange={(e) => setFiltroMensajero(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                      <th className="p-3 text-left">
-                        <div>Fecha</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroFecha}
-                          onChange={(e) => setFiltroFecha(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                      <th className="p-3 text-center">
-                        <div>Salida</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroSalida}
-                          onChange={(e) => setFiltroSalida(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                      <th className="p-3 text-center">
-                        <div>Efectivas</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroEfectivas}
-                          onChange={(e) => setFiltroEfectivas(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                      <th className="p-3 text-center">
-                        <div>Devoluciones</div>
-                        <input
-                          type="text"
-                          placeholder="Filtrar..."
-                          value={filtroDevoluciones}
-                          onChange={(e) => setFiltroDevoluciones(e.target.value)}
-                          className="mt-2 px-2 py-1 text-sm text-black rounded w-full"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {registrosFiltrados.map((reg, idx) => (
-                      <tr key={reg.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="p-3 border">{reg.id}</td>
-                        <td className="p-3 border font-semibold">{reg.nombreMensajero}</td>
-                        <td className="p-3 border">{reg.fecha}</td>
-                        <td className="p-3 border text-center">{reg.salida}</td>
-                        <td className="p-3 border text-center text-green-600 font-bold">{reg.efectivas}</td>
-                        <td className="p-3 border text-center text-red-600 font-bold">{reg.devoluciones}</td>
+            {/* Tabla de registros */}
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden">
+                  <table className="min-w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-blue-900 to-orange-500 text-white">
+                        <th className="p-3 text-left text-xs sm:text-sm whitespace-nowrap">ID</th>
+                        <th className="p-3 text-left text-xs sm:text-sm whitespace-nowrap">Mensajero</th>
+                        <th className="p-3 text-left text-xs sm:text-sm whitespace-nowrap">Fecha</th>
+                        <th className="p-3 text-center text-xs sm:text-sm whitespace-nowrap">Salida</th>
+                        <th className="p-3 text-center text-xs sm:text-sm whitespace-nowrap">Efectivas</th>
+                        <th className="p-3 text-center text-xs sm:text-sm whitespace-nowrap">Devoluciones</th>
+                        {(userRole === 'admin' || userRole === 'soporte') && (
+                          <th className="p-3 text-center text-xs sm:text-sm whitespace-nowrap">Acciones</th>
+                        )}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {registrosFiltrados.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">
-                    {registros.length === 0 ? 'No hay registros disponibles' : 'No se encontraron registros con los filtros aplicados'}
-                  </p>
-                )}
+                    </thead>
+                    <tbody>
+                      {registrosFiltrados.length === 0 ? (
+                        <tr>
+                          <td colSpan={userRole === 'admin' || userRole === 'soporte' ? 7 : 6} className="p-8 text-center text-gray-500">
+                            <Package size={48} className="mx-auto mb-3 text-gray-300" />
+                            <p className="text-sm sm:text-base">No hay registros que coincidan con los filtros</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        registrosFiltrados.map((registro, idx) => (
+                          <tr key={registro.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 border text-xs sm:text-sm">{registro.id}</td>
+                            <td className="p-3 border font-semibold text-xs sm:text-sm">{registro.mensajero}</td>
+                            <td className="p-3 border text-xs sm:text-sm">{registro.fecha}</td>
+                            <td className="p-3 border text-center font-semibold text-blue-600 text-xs sm:text-sm">{registro.salida}</td>
+                            <td className="p-3 border text-center font-semibold text-green-600 text-xs sm:text-sm">{registro.efectivas}</td>
+                            <td className="p-3 border text-center font-semibold text-red-600 text-xs sm:text-sm">{registro.devoluciones}</td>
+                            {(userRole === 'admin' || userRole === 'soporte') && (
+                              <td className="p-3 border text-center">
+                                <button
+                                  onClick={() => handleDeleteRegistro(registro.id)}
+                                  className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition"
+                                  title="Eliminar registro"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </>
-          )}
+            </div>
 
-          {activeTab === 'usuarios' && (userRole === 'admin' || userRole === 'soporte') && (
-            <>
-              <div className="mb-6">
-                <button
-                  onClick={() => openUserModal()}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
-                >
-                  <UserPlus size={20} />
-                  Agregar Usuario
-                </button>
-              </div>
+            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-700">
+                <strong>Total de registros mostrados:</strong> {registrosFiltrados.length} de {registros.length}
+              </p>
+            </div>
+          </div>
+        )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-blue-900 to-orange-500 text-white">
-                      <th className="p-3 text-left">Usuario</th>
-                      <th className="p-3 text-left">Contraseña</th>
-                      <th className="p-3 text-left">Rol</th>
-                      <th className="p-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(usuarios).map((user, idx) => (
-                      <tr key={user} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="p-3 border font-semibold">
-                          {user}
-                          {(user === 'admin' || user === 'soporte') && (
-                            <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded">🔒 Protegido</span>
-                          )}
-                        </td>
-                        <td className="p-3 border">
-                          {user === 'soporte' && userRole !== 'soporte' ? (
-                            <span className="text-gray-400 flex items-center gap-2">
-                              <Lock size={16} />
-                              Protegida
-                            </span>
-                          ) : (
-                            '•'.repeat(usuarios[user].password.length)
-                          )}
-                        </td>
-                        <td className="p-3 border">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            usuarios[user].role === 'soporte' 
-                              ? 'bg-purple-100 text-purple-700' 
-                              : usuarios[user].role === 'admin' 
-                              ? 'bg-yellow-100 text-yellow-700' 
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {usuarios[user].role === 'soporte' ? '🛡️ Soporte' : usuarios[user].role === 'admin' ? '👨‍💼 Admin' : '📦 Mensajero'}
-                          </span>
-                        </td>
-                        <td className="p-3 border text-center">
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => openUserModal(user)}
-                              className={`p-2 rounded transition ${
-                                user === 'soporte' && userRole !== 'soporte'
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-yellow-500 text-white hover:bg-yellow-600'
-                              }`}
-                              title={user === 'soporte' && userRole !== 'soporte' ? 'Solo soporte puede editar' : 'Editar'}
-                              disabled={user === 'soporte' && userRole !== 'soporte'}
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user)}
-                              className={`p-2 rounded transition ${
-                                user === 'admin' || user === 'soporte'
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-red-500 text-white hover:bg-red-600'
-                              }`}
-                              title={user === 'admin' || user === 'soporte' ? 'Usuario protegido' : 'Eliminar'}
-                              disabled={user === 'admin' || user === 'soporte'}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'permisos' && userRole === 'soporte' && (
-            <>
-              <h2 className="text-2xl font-bold text-blue-900 mb-6 flex items-center gap-2">
-                <Lock className="text-purple-500" />
-                Gestión de Permisos de Consulta
+        {/* Tab: Usuarios */}
+        {activeTab === 'usuarios' && (userRole === 'admin' || userRole === 'soporte') && (
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-blue-900 flex items-center gap-3">
+                <Users className="text-orange-500" />
+                Gestión de Usuarios
               </h2>
+              <button
+                onClick={handleAddUser}
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-900 to-orange-500 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
+              >
+                <UserPlus size={20} />
+                Nuevo Usuario
+              </button>
+            </div>
 
-              <div className="mb-4 p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
-                <p className="text-sm text-purple-900">
-                  <Shield className="inline mr-2" size={16} />
-                  Desde aquí puedes otorgar o revocar permisos de consulta a los usuarios mensajeros. Los usuarios Admin y Soporte siempre tienen acceso completo.
-                </p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-purple-900 to-purple-500 text-white">
-                      <th className="p-3 text-left">Usuario</th>
-                      <th className="p-3 text-left">Rol</th>
-                      <th className="p-3 text-center">Permiso de Consulta</th>
-                      <th className="p-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(usuarios).map((user, idx) => {
-                      const esProtegido = user === 'admin' || user === 'soporte';
-                      const tienePermiso = permisos[user] === true;
-                      
-                      return (
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden">
+                  <table className="min-w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-blue-900 to-orange-500 text-white">
+                        <th className="p-3 text-left text-xs sm:text-sm">Usuario</th>
+                        <th className="p-3 text-left text-xs sm:text-sm">Contraseña</th>
+                        <th className="p-3 text-left text-xs sm:text-sm">Rol</th>
+                        <th className="p-3 text-center text-xs sm:text-sm">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(usuarios).map((user, idx) => (
                         <tr key={user} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className="p-3 border font-semibold">{user}</td>
-                          <td className="p-3 border">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          <td className="p-3 border font-semibold text-xs sm:text-sm">{user}</td>
+                          <td className="p-3 border text-xs sm:text-sm">
+                            {(user === 'soporte' && userRole !== 'soporte') ? (
+                              <span className="text-gray-400">••••••••</span>
+                            ) : (
+                              <code className="bg-gray-100 px-2 py-1 rounded text-xs">{usuarios[user].password}</code>
+                            )}
+                          </td>
+                          <td className="p-3 border text-xs sm:text-sm">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                               usuarios[user].role === 'soporte' 
                                 ? 'bg-purple-100 text-purple-700' 
                                 : usuarios[user].role === 'admin' 
@@ -1146,62 +1000,153 @@ const MensajeriaHSSystem = () => {
                             </span>
                           </td>
                           <td className="p-3 border text-center">
-                            {esProtegido ? (
-                              <span className="px-4 py-2 bg-green-100 text-green-700 rounded-full font-semibold">
-                                ✓ Acceso Total (Permanente)
-                              </span>
-                            ) : (
-                              <span className={`px-4 py-2 rounded-full font-semibold ${
-                                tienePermiso 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : 'bg-red-100 text-red-700'
-                              }`}>
-                                {tienePermiso ? '✓ Permitido' : '✗ Denegado'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3 border text-center">
-                            {esProtegido ? (
-                              <span className="text-gray-400 text-sm">N/A</span>
-                            ) : (
+                            <div className="flex gap-2 justify-center flex-wrap">
                               <button
-                                onClick={() => togglePermiso(user)}
-                                className={`px-4 py-2 rounded-lg font-semibold transition ${
-                                  tienePermiso
-                                    ? 'bg-red-500 text-white hover:bg-red-600'
-                                    : 'bg-green-500 text-white hover:bg-green-600'
+                                onClick={() => handleEditUser(user)}
+                                disabled={user === 'soporte' && userRole !== 'soporte'}
+                                className={`p-2 rounded-lg transition ${
+                                  user === 'soporte' && userRole !== 'soporte'
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
                                 }`}
+                                title="Editar usuario"
                               >
-                                {tienePermiso ? '🔒 Revocar Acceso' : '🔓 Conceder Acceso'}
+                                <Edit2 size={16} />
                               </button>
-                            )}
+                              {user !== 'admin' && user !== 'soporte' && (
+                                <button
+                                  onClick={() => handleDeleteUser(user)}
+                                  className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition"
+                                  title="Eliminar usuario"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            </div>
 
-              <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-900">
-                  ⚠️ <strong>Nota:</strong> Los cambios en los permisos se aplican inmediatamente. Los usuarios mensajeros solo podrán ver la pestaña de "Consultas" si tienen el permiso concedido.
-                </p>
+            <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-900">
+                ⚠️ <strong>Nota:</strong> Los usuarios 'admin' y 'soporte' están protegidos y no pueden ser eliminados. Solo el usuario 'soporte' puede modificar su propia contraseña.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Permisos */}
+        {activeTab === 'permisos' && (userRole === 'admin' || userRole === 'soporte') && (
+          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-6 sm:mb-8 flex items-center gap-3">
+              <Shield className="text-orange-500" />
+              Control de Permisos de Consulta
+            </h2>
+
+            <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-900">
+                💡 <strong>Información:</strong> Los usuarios con rol 'mensajero' necesitan permiso explícito para acceder a la pestaña de "Consultas". Los usuarios 'admin' y 'soporte' tienen acceso total permanente.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden">
+                  <table className="min-w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-purple-900 to-purple-500 text-white">
+                        <th className="p-3 text-left text-xs sm:text-sm">Usuario</th>
+                        <th className="p-3 text-left text-xs sm:text-sm">Rol</th>
+                        <th className="p-3 text-center text-xs sm:text-sm">Permiso de Consulta</th>
+                        <th className="p-3 text-center text-xs sm:text-sm">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(usuarios).map((user, idx) => {
+                        const esProtegido = user === 'admin' || user === 'soporte';
+                        const tienePermiso = permisos[user] === true;
+                        
+                        return (
+                          <tr key={user} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="p-3 border font-semibold text-xs sm:text-sm">{user}</td>
+                            <td className="p-3 border">
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                                usuarios[user].role === 'soporte' 
+                                  ? 'bg-purple-100 text-purple-700' 
+                                  : usuarios[user].role === 'admin' 
+                                  ? 'bg-yellow-100 text-yellow-700' 
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {usuarios[user].role === 'soporte' ? '🛡️ Soporte' : usuarios[user].role === 'admin' ? '👨‍💼 Admin' : '📦 Mensajero'}
+                              </span>
+                            </td>
+                            <td className="p-3 border text-center">
+                              {esProtegido ? (
+                                <span className="px-4 py-2 bg-green-100 text-green-700 rounded-full font-semibold text-xs whitespace-nowrap">
+                                  ✓ Acceso Total (Permanente)
+                                </span>
+                              ) : (
+                                <span className={`px-4 py-2 rounded-full font-semibold text-xs whitespace-nowrap ${
+                                  tienePermiso 
+                                    ? 'bg-green-100 text-green-700' 
+                                    : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {tienePermiso ? '✓ Permitido' : '✗ Denegado'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 border text-center">
+                              {esProtegido ? (
+                                <span className="text-gray-400 text-sm">N/A</span>
+                              ) : (
+                                <button
+                                  onClick={() => togglePermiso(user)}
+                                  className={`px-4 py-2 rounded-lg font-semibold transition text-xs sm:text-sm whitespace-nowrap ${
+                                    tienePermiso
+                                      ? 'bg-red-500 text-white hover:bg-red-600'
+                                      : 'bg-green-500 text-white hover:bg-green-600'
+                                  }`}
+                                >
+                                  {tienePermiso ? '🔒 Revocar Acceso' : '🔓 Conceder Acceso'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </>
-          )}
-        </div>
+            </div>
 
+            <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-900">
+                ⚠️ <strong>Nota:</strong> Los cambios en los permisos se aplican inmediatamente. Los usuarios mensajeros solo podrán ver la pestaña de "Consultas" si tienen el permiso concedido.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Usuario */}
         {showUserModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
+                <h3 className="text-xl sm:text-2xl font-bold text-blue-900 flex items-center gap-2">
                   <Key className="text-orange-500" />
                   {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
                 </h3>
                 <button
-                  onClick={() => setShowUserModal(false)}
+                  onClick={() => {
+                    setShowUserModal(false);
+                    setShowNewPassword(false);
+                  }}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <X size={24} />
@@ -1228,7 +1173,7 @@ const MensajeriaHSSystem = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Contraseña * (mínimo 8 caracteres)
+                    Contraseña * (mínimo 8 caracteres con requisitos de seguridad)
                   </label>
                   {editingUser === 'soporte' && userRole !== 'soporte' ? (
                     <div className="w-full px-4 py-3 border-2 border-red-300 rounded-lg bg-red-50 flex items-center gap-2">
@@ -1236,13 +1181,70 @@ const MensajeriaHSSystem = () => {
                       <span className="text-red-700 font-semibold">Contraseña Protegida</span>
                     </div>
                   ) : (
-                    <input
-                      type="text"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
-                      placeholder={editingUser === 'soporte' ? 'Ingrese nueva contraseña' : 'Contraseña segura'}
-                    />
+                    <>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition"
+                          placeholder={editingUser === 'soporte' ? 'Ingrese nueva contraseña' : 'Contraseña segura'}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition"
+                        >
+                          {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      </div>
+                      
+                      {/* Indicador de fortaleza de contraseña */}
+                      {newPassword && (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-300 ${
+                                  passwordStrength.score < 3 ? 'bg-red-500' :
+                                  passwordStrength.score === 3 ? 'bg-yellow-500' :
+                                  passwordStrength.score === 4 ? 'bg-blue-500' :
+                                  'bg-green-500'
+                                }`}
+                                style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm font-semibold ${passwordStrength.color}`}>
+                              {passwordStrength.message}
+                            </span>
+                          </div>
+                          
+                          {/* Requisitos de contraseña */}
+                          <div className="space-y-1 text-xs">
+                            <div className={`flex items-center gap-2 ${passwordStrength.requirements.length ? 'text-green-600' : 'text-gray-500'}`}>
+                              {passwordStrength.requirements.length ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                              <span>Mínimo 8 caracteres</span>
+                            </div>
+                            <div className={`flex items-center gap-2 ${passwordStrength.requirements.uppercase ? 'text-green-600' : 'text-gray-500'}`}>
+                              {passwordStrength.requirements.uppercase ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                              <span>Al menos una mayúscula (A-Z)</span>
+                            </div>
+                            <div className={`flex items-center gap-2 ${passwordStrength.requirements.lowercase ? 'text-green-600' : 'text-gray-500'}`}>
+                              {passwordStrength.requirements.lowercase ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                              <span>Al menos una minúscula (a-z)</span>
+                            </div>
+                            <div className={`flex items-center gap-2 ${passwordStrength.requirements.number ? 'text-green-600' : 'text-gray-500'}`}>
+                              {passwordStrength.requirements.number ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                              <span>Al menos un número (0-9)</span>
+                            </div>
+                            <div className={`flex items-center gap-2 ${passwordStrength.requirements.special ? 'text-green-600' : 'text-gray-500'}`}>
+                              {passwordStrength.requirements.special ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                              <span>Al menos un carácter especial (!@#$%...)</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {editingUser === 'soporte' && userRole !== 'soporte' && (
                     <p className="text-xs text-red-600 mt-1">🔒 Solo el usuario soporte puede ver/modificar su contraseña</p>
@@ -1268,7 +1270,7 @@ const MensajeriaHSSystem = () => {
                   )}
                 </div>
 
-                <div className="flex gap-3 mt-6">
+                <div className="flex flex-col sm:flex-row gap-3 mt-6">
                   <button
                     onClick={handleSaveUser}
                     disabled={editingUser === 'soporte' && userRole !== 'soporte'}
@@ -1281,7 +1283,10 @@ const MensajeriaHSSystem = () => {
                     {editingUser ? 'Actualizar' : 'Crear'}
                   </button>
                   <button
-                    onClick={() => setShowUserModal(false)}
+                    onClick={() => {
+                      setShowUserModal(false);
+                      setShowNewPassword(false);
+                    }}
                     className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400 transition"
                   >
                     Cancelar
@@ -1295,5 +1300,6 @@ const MensajeriaHSSystem = () => {
     </div>
   );
 };
+
 
 export default MensajeriaHSSystem;
