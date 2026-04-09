@@ -101,7 +101,6 @@ const MensajeriaHSSystem = () => {
           ...val,
           firebaseKey
         }));
-        // Ordenar por id descendente (más reciente primero)
         lista.sort((a, b) => b.id - a.id);
         setRegistros(lista);
       } else {
@@ -118,7 +117,6 @@ const MensajeriaHSSystem = () => {
       if (data) {
         setUsuarios(data);
       } else {
-        // Primera vez: crear usuarios por defecto
         const defaultUsers = {
           admin:     { password: 'Admin123!HS',     role: 'admin' },
           soporte:   { password: 'Soporte2025!HS',  role: 'soporte' },
@@ -270,21 +268,22 @@ const MensajeriaHSSystem = () => {
     }
   };
 
+  // ─── Eliminar toda la base de datos ──────────────────────────────────────
   const handleEliminarBaseDatos = () => {
-  if (userRole !== 'admin') return;
-  const confirmacion = window.confirm(
-    '⚠️ ADVERTENCIA: Esta acción eliminará TODOS los registros de la base de datos permanentemente.\n\n¿Está completamente seguro?'
-  );
-  if (!confirmacion) return;
-  const confirmacion2 = window.prompt(
-    'Para confirmar, escriba exactamente: ELIMINAR TODO'
-  );
-  if (confirmacion2 !== 'ELIMINAR TODO') {
-    alert('Confirmación incorrecta. Operación cancelada.');
-    return;
-  }
-  remove(ref(db, 'registros'));
-};
+    if (userRole !== 'admin') return;
+    const confirmacion = window.confirm(
+      '⚠️ ADVERTENCIA: Esta acción eliminará TODOS los registros de la base de datos permanentemente.\n\n¿Está completamente seguro?'
+    );
+    if (!confirmacion) return;
+    const confirmacion2 = window.prompt(
+      'Para confirmar, escriba exactamente: ELIMINAR TODO'
+    );
+    if (confirmacion2 !== 'ELIMINAR TODO') {
+      alert('Confirmación incorrecta. Operación cancelada.');
+      return;
+    }
+    remove(ref(db, 'registros'));
+  };
 
   // ─── Exportar CSV ─────────────────────────────────────────────────────────
   const handleExport = () => {
@@ -437,57 +436,59 @@ const MensajeriaHSSystem = () => {
             </div>
           )}
 
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Usuario</label>
-              <input
-                autoComplete="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
-                placeholder="Ingrese su usuario"
-                disabled={isLocked}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
-              <div className="relative">
+          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} autoComplete="on">
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Usuario</label>
                 <input
-                  autoComplete="current-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
-                  placeholder="Ingrese su contraseña"
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
+                  placeholder="Ingrese su usuario"
                   disabled={isLocked}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition"
-                  disabled={isLocked}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
               </div>
-            </div>
 
-            <button
-              onClick={handleLogin}
-              disabled={isLocked}
-              className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-200 ${
-                isLocked
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-900 to-orange-500 hover:shadow-lg hover:scale-105 active:scale-95'
-              }`}
-            >
-              {isLocked ? 'Sistema Bloqueado' : 'Iniciar Sesión'}
-            </button>
-          </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none transition duration-200"
+                    placeholder="Ingrese su contraseña"
+                    disabled={isLocked}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition"
+                    disabled={isLocked}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLocked}
+                className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-200 ${
+                  isLocked
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-900 to-orange-500 hover:shadow-lg hover:scale-105 active:scale-95'
+                }`}
+              >
+                {isLocked ? 'Sistema Bloqueado' : 'Iniciar Sesión'}
+              </button>
+            </div>
+          </form>
 
           <div className="mt-8 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
             <div className="flex items-start gap-2">
@@ -670,24 +671,25 @@ const MensajeriaHSSystem = () => {
                 <CheckCircle className="text-orange-500" />
                 Consultar Registros
               </h2>
-              <button
-                onClick={handleExport}
-                className="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2"
-              >
-                <Download size={20} />
-                Exportar a CSV
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <button
+                  onClick={handleExport}
+                  className="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2"
+                >
+                  <Download size={20} />
+                  Exportar a CSV
+                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={handleEliminarBaseDatos}
+                    className="w-full sm:w-auto bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={20} />
+                    Eliminar Base de Datos
+                  </button>
+                )}
+              </div>
             </div>
-
-            {userRole === 'admin' && (
-  <button
-    onClick={handleEliminarBaseDatos}
-    className="w-full sm:w-auto bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
-  >
-    <Trash2 size={20} />
-    Eliminar Base de Datos
-  </button>
-)}
 
             {/* Filtros */}
             <div className="mb-6 p-4 sm:p-6 bg-blue-50 border-2 border-blue-200 rounded-lg">
