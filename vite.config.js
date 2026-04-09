@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/proyectos-nexa/', // Nombre de tu repositorio
+  base: '/Mensajeria_v2/'
 })
