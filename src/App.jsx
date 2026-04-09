@@ -270,6 +270,22 @@ const MensajeriaHSSystem = () => {
     }
   };
 
+  const handleEliminarBaseDatos = () => {
+  if (userRole !== 'admin') return;
+  const confirmacion = window.confirm(
+    '⚠️ ADVERTENCIA: Esta acción eliminará TODOS los registros de la base de datos permanentemente.\n\n¿Está completamente seguro?'
+  );
+  if (!confirmacion) return;
+  const confirmacion2 = window.prompt(
+    'Para confirmar, escriba exactamente: ELIMINAR TODO'
+  );
+  if (confirmacion2 !== 'ELIMINAR TODO') {
+    alert('Confirmación incorrecta. Operación cancelada.');
+    return;
+  }
+  remove(ref(db, 'registros'));
+};
+
   // ─── Exportar CSV ─────────────────────────────────────────────────────────
   const handleExport = () => {
     const registrosFiltrados = getFilteredRegistros();
@@ -425,6 +441,7 @@ const MensajeriaHSSystem = () => {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Usuario</label>
               <input
+                autoComplete="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -439,6 +456,7 @@ const MensajeriaHSSystem = () => {
               <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
               <div className="relative">
                 <input
+                  autoComplete="current-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -660,6 +678,16 @@ const MensajeriaHSSystem = () => {
                 Exportar a CSV
               </button>
             </div>
+
+            {userRole === 'admin' && (
+  <button
+    onClick={handleEliminarBaseDatos}
+    className="w-full sm:w-auto bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+  >
+    <Trash2 size={20} />
+    Eliminar Base de Datos
+  </button>
+)}
 
             {/* Filtros */}
             <div className="mb-6 p-4 sm:p-6 bg-blue-50 border-2 border-blue-200 rounded-lg">
